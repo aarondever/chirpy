@@ -40,7 +40,7 @@ func main() {
 
 	// api enpoints
 	serverMux.HandleFunc("GET /api/healthz", handleReadiness)
-	serverMux.HandleFunc("POST /api/validate_chirp", handleValidation)
+	serverMux.HandleFunc("POST /api/chirps", cfg.handlerCreateChirp)
 	serverMux.HandleFunc("POST /api/users", cfg.handlerCreateUser)
 
 	server := http.Server{
