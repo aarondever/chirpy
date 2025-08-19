@@ -13,10 +13,6 @@ type errorResponse struct {
 	Error string `json:"error"`
 }
 
-type validResponse struct {
-	Valid bool `json:"valid"`
-}
-
 func RespondWithJSON(w http.ResponseWriter, r *http.Request, payload any, statusCode int) {
 	w.Header().Set("Content-Type", "application/json")
 
