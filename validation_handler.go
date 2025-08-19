@@ -4,8 +4,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+
+	"github.com/aarondever/chirpy/internal/utils"
 )
 
+type requestBody struct {
+	Body string `json:"body"`
+}
 type validResponse struct {
 	Valid bool `json:"valid"`
 }
@@ -17,12 +22,12 @@ type cleanedResponse struct {
 func handleValidation(w http.ResponseWriter, r *http.Request) {
 	var body requestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		RespondWithError(w, r, "Something went wrong", http.StatusInternalServerError)
+		utils.RespondWithError(w, r, "Something went wrong", http.StatusInternalServerError)
 		return
 	}
 
 	if len(body.Body) > 140 {
-		RespondWithError(w, r, "Chirp is too long", http.StatusBadRequest)
+		utils.RespondWithError(w, r, "Chirp is too long", http.StatusBadRequest)
 		return
 	}
 
@@ -30,7 +35,7 @@ func handleValidation(w http.ResponseWriter, r *http.Request) {
 		CleanedBody: censorProfane(body.Body),
 	}
 
-	RespondWithJSON(w, r, response, http.StatusOK)
+	utils.RespondWithJSON(w, r, response, http.StatusOK)
 }
 
 func censorProfane(text string) string {

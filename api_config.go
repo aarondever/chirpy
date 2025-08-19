@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 
 	"github.com/aarondever/chirpy/internal/database"
+	"github.com/aarondever/chirpy/internal/utils"
 )
 
 type apiConfig struct {
@@ -45,7 +46,7 @@ func (cfg *apiConfig) resetMetrics(w http.ResponseWriter, r *http.Request) {
 	cfg.fileserverHits.Store(0)
 
 	if err := cfg.dbQueries.ResetUsers(r.Context()); err != nil {
-		RespondWithError(w, r, err.Error(), http.StatusInternalServerError)
+		utils.RespondWithError(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }

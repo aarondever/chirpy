@@ -1,17 +1,9 @@
-package main
+package utils
 
 import (
 	"encoding/json"
 	"net/http"
 )
-
-type requestBody struct {
-	Body string `json:"body"`
-}
-
-type errorResponse struct {
-	Error string `json:"error"`
-}
 
 func RespondWithJSON(w http.ResponseWriter, r *http.Request, payload any, statusCode int) {
 	w.Header().Set("Content-Type", "application/json")
@@ -27,6 +19,9 @@ func RespondWithJSON(w http.ResponseWriter, r *http.Request, payload any, status
 }
 
 func RespondWithError(w http.ResponseWriter, r *http.Request, err string, statusCode int) {
+	type errorResponse struct {
+		Error string `json:"error"`
+	}
 	response := errorResponse{Error: err}
 	RespondWithJSON(w, r, response, statusCode)
 }

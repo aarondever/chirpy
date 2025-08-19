@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/aarondever/chirpy/internal/auth"
 	"github.com/aarondever/chirpy/internal/database"
+	"github.com/aarondever/chirpy/internal/utils"
 	"github.com/google/uuid"
 )
 
@@ -26,20 +28,31 @@ type chirpResponse struct {
 	UserID    uuid.UUID `json:"user_id"`
 }
 
-func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, r *http.Request) {
-	type requestBody struct {
-		Email string `json:"email"`
-	}
+type userRequest struct {
+	Password string `json:"password"`
+	Email    string `json:"email"`
+}
 
-	var body requestBody
+func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
+	var body userRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		RespondWithError(w, r, err.Error(), http.StatusInternalServerError)
+		utils.RespondWithError(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	user, err := cfg.dbQueries.CreateUser(r.Context(), body.Email)
+	user, err := cfg.dbQueries.GetUserByEmail(r.Context(), body.Email)
 	if err != nil {
-		RespondWithError(w, r, err.Error(), http.StatusInternalServerError)
+		if errors.Is(err, sql.ErrNoRows) {
+			utils.RespondWithJSON(w, r, "User not found", http.StatusNotFound)
+			return
+		}
+
+		utils.RespondWithError(w, r, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := auth.CheckPasswordHash(body.Password, user.HashedPassword); err != nil {
+		utils.RespondWithError(w, r, "Incorrect email or password", http.StatusUnauthorized)
 		return
 	}
 
@@ -50,7 +63,39 @@ func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		Email:     user.Email,
 	}
 
-	RespondWithJSON(w, r, response, http.StatusCreated)
+	utils.RespondWithJSON(w, r, response, http.StatusOK)
+}
+
+func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, r *http.Request) {
+	var body userRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		utils.RespondWithError(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	hash, err := auth.HashPassword(body.Password)
+	if err != nil {
+		utils.RespondWithError(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	user, err := cfg.dbQueries.CreateUser(r.Context(), database.CreateUserParams{
+		Email:          body.Email,
+		HashedPassword: hash,
+	})
+	if err != nil {
+		utils.RespondWithError(w, r, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	response := userResponse{
+		ID:        user.ID,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+		Email:     user.Email,
+	}
+
+	utils.RespondWithJSON(w, r, response, http.StatusCreated)
 }
 
 func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) {
@@ -61,12 +106,12 @@ func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) 
 
 	var body requestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		RespondWithError(w, r, "Something went wrong", http.StatusInternalServerError)
+		utils.RespondWithError(w, r, "Something went wrong", http.StatusInternalServerError)
 		return
 	}
 
 	if len(body.Body) > 140 {
-		RespondWithError(w, r, "Chirp is too long", http.StatusBadRequest)
+		utils.RespondWithError(w, r, "Chirp is too long", http.StatusBadRequest)
 		return
 	}
 
@@ -75,7 +120,7 @@ func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) 
 		UserID: body.UserID,
 	})
 	if err != nil {
-		RespondWithError(w, r, err.Error(), http.StatusInternalServerError)
+		utils.RespondWithError(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -87,13 +132,13 @@ func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) 
 		UserID:    chirp.UserID,
 	}
 
-	RespondWithJSON(w, r, response, http.StatusCreated)
+	utils.RespondWithJSON(w, r, response, http.StatusCreated)
 }
 
 func (cfg *apiConfig) handleGetChirps(w http.ResponseWriter, r *http.Request) {
 	chirps, err := cfg.dbQueries.GetChirps(r.Context())
 	if err != nil {
-		RespondWithError(w, r, err.Error(), http.StatusInternalServerError)
+		utils.RespondWithError(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -108,25 +153,25 @@ func (cfg *apiConfig) handleGetChirps(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	RespondWithJSON(w, r, response, http.StatusOK)
+	utils.RespondWithJSON(w, r, response, http.StatusOK)
 }
 
 func (cfg *apiConfig) handleGetChirpByID(w http.ResponseWriter, r *http.Request) {
 	v := r.PathValue("chirpID")
 	chirpID, err := uuid.Parse(v)
 	if err != nil {
-		RespondWithError(w, r, err.Error(), http.StatusBadRequest)
+		utils.RespondWithError(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	chirp, err := cfg.dbQueries.GetChirpById(r.Context(), chirpID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			RespondWithJSON(w, r, nil, http.StatusNotFound)
+			utils.RespondWithJSON(w, r, "Chirp not found", http.StatusNotFound)
 			return
 		}
 
-		RespondWithError(w, r, err.Error(), http.StatusInternalServerError)
+		utils.RespondWithError(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -138,5 +183,5 @@ func (cfg *apiConfig) handleGetChirpByID(w http.ResponseWriter, r *http.Request)
 		UserID:    chirp.UserID,
 	}
 
-	RespondWithJSON(w, r, response, http.StatusOK)
+	utils.RespondWithJSON(w, r, response, http.StatusOK)
 }

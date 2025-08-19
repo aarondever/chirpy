@@ -44,6 +44,7 @@ func main() {
 	serverMux.HandleFunc("GET /api/chirps/{chirpID}", cfg.handleGetChirpByID)
 	serverMux.HandleFunc("POST /api/chirps", cfg.handleCreateChirp)
 	serverMux.HandleFunc("POST /api/users", cfg.handleCreateUser)
+	serverMux.HandleFunc("POST /api/login", cfg.handleLogin)
 
 	server := http.Server{
 		Handler: serverMux,
