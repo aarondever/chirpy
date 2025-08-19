@@ -19,10 +19,12 @@ func main() {
 			http.StripPrefix("/app",
 				http.FileServer(http.Dir(".")))))
 
+	// admin enpoints
+	serverMux.HandleFunc("GET /admin/metrics", cfg.handleMetrics)
+	serverMux.HandleFunc("POST /admin/reset", cfg.resetMetrics)
+
 	// api enpoints
 	serverMux.HandleFunc("GET /api/healthz", handleReadiness)
-	serverMux.HandleFunc("GET /api/metrics", cfg.handleMetrics)
-	serverMux.HandleFunc("POST /api/reset", cfg.resetMetrics)
 
 	server := http.Server{
 		Handler: serverMux,
@@ -53,7 +55,16 @@ func (cfg *apiConfig) middlewareMetricsInt(next http.Handler) http.Handler {
 }
 
 func (cfg *apiConfig) handleMetrics(responseWriter http.ResponseWriter, request *http.Request) {
-	body := fmt.Appendf(nil, "Hits: %d", cfg.fileserverHits.Load())
+	html := fmt.Sprintf(`<html>
+							<body>
+								<h1>Welcome, Chirpy Admin</h1>
+								<p>Chirpy has been visited %d times!</p>
+							</body>
+						</html>`,
+		cfg.fileserverHits.Load())
+	body := []byte(html)
+
+	responseWriter.Header().Set("Content-Type", "text/html")
 	responseWriter.Write(body)
 }
 
