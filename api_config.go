@@ -10,6 +10,7 @@ import (
 
 type apiConfig struct {
 	fileserverHits atomic.Int32
+	platform       string
 	dbQueries      *database.Queries
 }
 
@@ -21,7 +22,7 @@ func (cfg *apiConfig) middlewareMetricsInt(next http.Handler) http.Handler {
 	})
 }
 
-func (cfg *apiConfig) handleMetrics(responseWriter http.ResponseWriter, request *http.Request) {
+func (cfg *apiConfig) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	html := fmt.Sprintf(`<html>
 							<body>
 								<h1>Welcome, Chirpy Admin</h1>
@@ -31,10 +32,20 @@ func (cfg *apiConfig) handleMetrics(responseWriter http.ResponseWriter, request 
 		cfg.fileserverHits.Load())
 	body := []byte(html)
 
-	responseWriter.Header().Set("Content-Type", "text/html")
-	responseWriter.Write(body)
+	w.Header().Set("Content-Type", "text/html")
+	w.Write(body)
 }
 
-func (cfg *apiConfig) resetMetrics(responseWriter http.ResponseWriter, request *http.Request) {
+func (cfg *apiConfig) resetMetrics(w http.ResponseWriter, r *http.Request) {
+	if cfg.platform != "dev" {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
 	cfg.fileserverHits.Store(0)
+
+	if err := cfg.dbQueries.ResetUsers(r.Context()); err != nil {
+		RespondWithError(w, r, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }

@@ -19,11 +19,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	dbQueries := database.New(db)
 
 	cfg := apiConfig{
 		fileserverHits: atomic.Int32{},
-		dbQueries:      dbQueries,
+		platform:       os.Getenv("PLATFORM"),
+		dbQueries:      database.New(db),
 	}
 
 	serverMux := http.NewServeMux()
@@ -41,6 +41,7 @@ func main() {
 	// api enpoints
 	serverMux.HandleFunc("GET /api/healthz", handleReadiness)
 	serverMux.HandleFunc("POST /api/validate_chirp", handleValidation)
+	serverMux.HandleFunc("POST /api/users", cfg.handlerCreateUser)
 
 	server := http.Server{
 		Handler: serverMux,
@@ -50,10 +51,10 @@ func main() {
 	server.ListenAndServe()
 }
 
-func handleReadiness(responseWriter http.ResponseWriter, request *http.Request) {
-	responseWriter.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	responseWriter.WriteHeader(http.StatusOK)
+func handleReadiness(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
 
 	body := []byte("OK")
-	responseWriter.Write(body)
+	w.Write(body)
 }

@@ -14,23 +14,15 @@ type cleanedResponse struct {
 	CleanedBody string `json:"cleaned_body"`
 }
 
-func handleValidation(responseWriter http.ResponseWriter, request *http.Request) {
+func handleValidation(w http.ResponseWriter, r *http.Request) {
 	var body requestBody
-	if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
-		RespondWithError(
-			responseWriter,
-			request,
-			"Something went wrong",
-			http.StatusInternalServerError)
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		RespondWithError(w, r, "Something went wrong", http.StatusInternalServerError)
 		return
 	}
 
 	if len(body.Body) > 140 {
-		RespondWithError(
-			responseWriter,
-			request,
-			"Chirp is too long",
-			http.StatusBadRequest)
+		RespondWithError(w, r, "Chirp is too long", http.StatusBadRequest)
 		return
 	}
 
@@ -38,7 +30,7 @@ func handleValidation(responseWriter http.ResponseWriter, request *http.Request)
 		CleanedBody: censorProfane(body.Body),
 	}
 
-	RespondWithJSON(responseWriter, request, response, http.StatusOK)
+	RespondWithJSON(w, r, response, http.StatusOK)
 }
 
 func censorProfane(text string) string {
@@ -49,7 +41,7 @@ func censorProfane(text string) string {
 	)
 
 	var result []string
-	for _, s := range strings.Split(text, " ") {
+	for s := range strings.SplitSeq(text, " ") {
 		switch strings.ToLower(s) {
 		case KERFUFFLE, SHARBERT, FORNAX:
 			result = append(result, "****")
