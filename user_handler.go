@@ -1,7 +1,9 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -9,7 +11,22 @@ import (
 	"github.com/google/uuid"
 )
 
-func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) {
+type userResponse struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
+}
+
+type chirpResponse struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Body      string    `json:"body"`
+	UserID    uuid.UUID `json:"user_id"`
+}
+
+func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	type requestBody struct {
 		Email string `json:"email"`
 	}
@@ -26,14 +43,7 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	type responseBody struct {
-		ID        uuid.UUID `json:"id"`
-		CreatedAt time.Time `json:"created_at"`
-		UpdatedAt time.Time `json:"updated_at"`
-		Email     string    `json:"email"`
-	}
-
-	response := responseBody{
+	response := userResponse{
 		ID:        user.ID,
 		CreatedAt: user.CreatedAt,
 		UpdatedAt: user.UpdatedAt,
@@ -43,7 +53,7 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) 
 	RespondWithJSON(w, r, response, http.StatusCreated)
 }
 
-func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) {
 	type requestBody struct {
 		Body   string    `json:"body"`
 		UserID uuid.UUID `json:"user_id"`
@@ -69,15 +79,7 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	type responseBody struct {
-		ID        uuid.UUID `json:"id"`
-		CreatedAt time.Time `json:"created_at"`
-		UpdatedAt time.Time `json:"updated_at"`
-		Body      string    `json:"body"`
-		UserID    uuid.UUID `json:"user_id"`
-	}
-
-	response := responseBody{
+	response := chirpResponse{
 		ID:        chirp.ID,
 		CreatedAt: chirp.CreatedAt,
 		UpdatedAt: chirp.UpdatedAt,
@@ -86,4 +88,55 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request)
 	}
 
 	RespondWithJSON(w, r, response, http.StatusCreated)
+}
+
+func (cfg *apiConfig) handleGetChirps(w http.ResponseWriter, r *http.Request) {
+	chirps, err := cfg.dbQueries.GetChirps(r.Context())
+	if err != nil {
+		RespondWithError(w, r, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var response = make([]chirpResponse, 0, len(chirps))
+	for _, chirp := range chirps {
+		response = append(response, chirpResponse{
+			ID:        chirp.ID,
+			CreatedAt: chirp.CreatedAt,
+			UpdatedAt: chirp.UpdatedAt,
+			Body:      chirp.Body,
+			UserID:    chirp.UserID,
+		})
+	}
+
+	RespondWithJSON(w, r, response, http.StatusOK)
+}
+
+func (cfg *apiConfig) handleGetChirpByID(w http.ResponseWriter, r *http.Request) {
+	v := r.PathValue("chirpID")
+	chirpID, err := uuid.Parse(v)
+	if err != nil {
+		RespondWithError(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	chirp, err := cfg.dbQueries.GetChirpById(r.Context(), chirpID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			RespondWithJSON(w, r, nil, http.StatusNotFound)
+			return
+		}
+
+		RespondWithError(w, r, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	response := chirpResponse{
+		ID:        chirp.ID,
+		CreatedAt: chirp.CreatedAt,
+		UpdatedAt: chirp.UpdatedAt,
+		Body:      chirp.Body,
+		UserID:    chirp.UserID,
+	}
+
+	RespondWithJSON(w, r, response, http.StatusOK)
 }
