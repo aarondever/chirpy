@@ -13,13 +13,16 @@ func main() {
 
 	serverMux := http.NewServeMux()
 
+	// app enpoints
 	serverMux.Handle("/app/",
 		cfg.middlewareMetricsInt(
 			http.StripPrefix("/app",
 				http.FileServer(http.Dir(".")))))
-	serverMux.HandleFunc("GET /healthz", handleReadiness)
-	serverMux.HandleFunc("GET /metrics", cfg.handleMetrics)
-	serverMux.HandleFunc("POST /reset", cfg.resetMetrics)
+
+	// api enpoints
+	serverMux.HandleFunc("GET /api/healthz", handleReadiness)
+	serverMux.HandleFunc("GET /api/metrics", cfg.handleMetrics)
+	serverMux.HandleFunc("POST /api/reset", cfg.resetMetrics)
 
 	server := http.Server{
 		Handler: serverMux,
