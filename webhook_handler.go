@@ -6,11 +6,23 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/aarondever/chirpy/internal/auth"
 	"github.com/aarondever/chirpy/internal/utils"
 	"github.com/google/uuid"
 )
 
 func (cfg *apiConfig) polkaWebhook(w http.ResponseWriter, r *http.Request) {
+	key, err := auth.GetAPIKey(r.Header)
+	if err != nil {
+		utils.RespondWithError(w, r, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	if key != cfg.polkaKey {
+		utils.RespondWithError(w, r, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	type requestBody struct {
 		Event string `json:"event"`
 		Data  struct {
@@ -29,7 +41,7 @@ func (cfg *apiConfig) polkaWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := cfg.dbQueries.UpgradeUser(r.Context(), body.Data.UserID)
+	_, err = cfg.dbQueries.UpgradeUser(r.Context(), body.Data.UserID)
 	if err != nil && errors.Is(err, sql.ErrNoRows) {
 		w.WriteHeader(http.StatusNotFound)
 		return

@@ -25,6 +25,7 @@ func main() {
 		platform:       os.Getenv("PLATFORM"),
 		dbQueries:      database.New(db),
 		jwtSecret:      os.Getenv("JWT_SECRET"),
+		polkaKey:       os.Getenv("POLKA_KEY"),
 	}
 
 	serverMux := http.NewServeMux()
