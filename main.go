@@ -46,6 +46,8 @@ func main() {
 	serverMux.HandleFunc("POST /api/chirps", cfg.handleCreateChirp)
 	serverMux.HandleFunc("POST /api/users", cfg.handleCreateUser)
 	serverMux.HandleFunc("POST /api/login", cfg.handleLogin)
+	serverMux.HandleFunc("POST /api/refresh", cfg.handleRefreshToken)
+	serverMux.HandleFunc("POST /api/revoke", cfg.handleRevokeToken)
 
 	server := http.Server{
 		Handler: serverMux,

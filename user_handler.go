@@ -14,11 +14,12 @@ import (
 )
 
 type userResponse struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
-	Token     string    `json:"token"`
+	ID           uuid.UUID `json:"id"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	Email        string    `json:"email"`
+	Token        string    `json:"token"`
+	RefreshToken string    `json:"refresh_token"`
 }
 
 type chirpResponse struct {
@@ -30,9 +31,8 @@ type chirpResponse struct {
 }
 
 type userRequest struct {
-	Password         string `json:"password"`
-	Email            string `json:"email"`
-	ExpiresInSeconds int    `json:"expires_in_seconds"`
+	Password string `json:"password"`
+	Email    string `json:"email"`
 }
 
 func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -62,24 +62,27 @@ func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// generate jwt
-	expiresIn := time.Hour
-	if sec := time.Duration(body.ExpiresInSeconds) * time.Second; sec > 0 && sec < expiresIn {
-		expiresIn = sec
-	}
-
-	token, err := auth.MakeJWT(user.ID, cfg.jwtSecret, expiresIn)
+	token, err := auth.MakeJWT(user.ID, cfg.jwtSecret, time.Hour)
 	if err != nil {
 		utils.RespondWithJSON(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	// generate refresh token
+	refreshToken := auth.MakeRefreshToken()
+	cfg.dbQueries.CreateRfreshToken(r.Context(), database.CreateRfreshTokenParams{
+		Token:  refreshToken,
+		UserID: user.ID,
+	})
+
 	// return response
 	response := userResponse{
-		ID:        user.ID,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-		Email:     user.Email,
-		Token:     token,
+		ID:           user.ID,
+		CreatedAt:    user.CreatedAt,
+		UpdatedAt:    user.UpdatedAt,
+		Email:        user.Email,
+		Token:        token,
+		RefreshToken: refreshToken,
 	}
 
 	utils.RespondWithJSON(w, r, response, http.StatusOK)
@@ -214,4 +217,47 @@ func (cfg *apiConfig) handleGetChirpByID(w http.ResponseWriter, r *http.Request)
 	}
 
 	utils.RespondWithJSON(w, r, response, http.StatusOK)
+}
+
+func (cfg *apiConfig) handleRefreshToken(w http.ResponseWriter, r *http.Request) {
+	refreshToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		utils.RespondWithError(w, r, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	userID, err := cfg.dbQueries.GetUserFromRefreshToken(r.Context(), refreshToken)
+	if err != nil {
+		utils.RespondWithError(w, r, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	token, err := auth.MakeJWT(userID, cfg.jwtSecret, time.Hour)
+	if err != nil {
+		utils.RespondWithError(w, r, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	response := struct {
+		Token string `json:"token"`
+	}{
+		Token: token,
+	}
+
+	utils.RespondWithJSON(w, r, response, http.StatusOK)
+}
+
+func (cfg *apiConfig) handleRevokeToken(w http.ResponseWriter, r *http.Request) {
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		utils.RespondWithError(w, r, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	if err := cfg.dbQueries.RevokeRefreshToken(r.Context(), token); err != nil {
+		utils.RespondWithError(w, r, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
