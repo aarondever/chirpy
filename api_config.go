@@ -5,8 +5,10 @@ import (
 	"net/http"
 	"sync/atomic"
 
+	"github.com/aarondever/chirpy/internal/auth"
 	"github.com/aarondever/chirpy/internal/database"
 	"github.com/aarondever/chirpy/internal/utils"
+	"github.com/google/uuid"
 )
 
 type apiConfig struct {
@@ -50,4 +52,18 @@ func (cfg *apiConfig) resetMetrics(w http.ResponseWriter, r *http.Request) {
 		utils.RespondWithError(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
+}
+
+func (cfg *apiConfig) getUserFromToken(r *http.Request) (uuid.UUID, error) {
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+
+	userID, err := auth.ValidateJWT(token, cfg.jwtSecret)
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+
+	return userID, nil
 }

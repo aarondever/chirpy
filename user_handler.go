@@ -121,13 +121,7 @@ func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
-	token, err := auth.GetBearerToken(r.Header)
-	if err != nil {
-		utils.RespondWithError(w, r, err.Error(), http.StatusUnauthorized)
-		return
-	}
-
-	userID, err := auth.ValidateJWT(token, cfg.jwtSecret)
+	userID, err := cfg.getUserFromToken(r)
 	if err != nil {
 		utils.RespondWithError(w, r, err.Error(), http.StatusUnauthorized)
 		return
@@ -166,13 +160,7 @@ func (cfg *apiConfig) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) {
-	token, err := auth.GetBearerToken(r.Header)
-	if err != nil {
-		utils.RespondWithError(w, r, err.Error(), http.StatusUnauthorized)
-		return
-	}
-
-	userID, err := auth.ValidateJWT(token, cfg.jwtSecret)
+	userID, err := cfg.getUserFromToken(r)
 	if err != nil {
 		utils.RespondWithError(w, r, err.Error(), http.StatusUnauthorized)
 		return
@@ -262,6 +250,41 @@ func (cfg *apiConfig) handleGetChirpByID(w http.ResponseWriter, r *http.Request)
 	}
 
 	utils.RespondWithJSON(w, r, response, http.StatusOK)
+}
+
+func (cfg *apiConfig) handleDeleteChirp(w http.ResponseWriter, r *http.Request) {
+	userID, err := cfg.getUserFromToken(r)
+	if err != nil {
+		utils.RespondWithError(w, r, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	v := r.PathValue("chirpID")
+	chirpID, err := uuid.Parse(v)
+	if err != nil {
+		utils.RespondWithError(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	chirp, err := cfg.dbQueries.GetChirpById(r.Context(), chirpID)
+	if err != nil {
+		utils.RespondWithError(w, r, err.Error(), http.StatusNotFound)
+		return
+	}
+	if chirp.UserID != userID {
+		utils.RespondWithError(w, r, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	if err := cfg.dbQueries.DeleteChirp(r.Context(), database.DeleteChirpParams{
+		ID:     chirpID,
+		UserID: userID,
+	}); err != nil {
+		utils.RespondWithError(w, r, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (cfg *apiConfig) handleRefreshToken(w http.ResponseWriter, r *http.Request) {

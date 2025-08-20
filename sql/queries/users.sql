@@ -37,6 +37,9 @@ RETURNING *;
 -- name: GetChirps :many
 SELECT * FROM chirps ORDER BY created_At;
 
+-- name: DeleteChirp :exec
+DELETE FROM chirps WHERE id = $1 AND user_id = $2;
+
 -- name: GetChirpById :one
 SELECT * FROM chirps WHERE id = $1;
 
