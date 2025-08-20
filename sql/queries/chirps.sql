@@ -11,8 +11,13 @@ RETURNING *;
 
 -- name: GetChirps :many
 SELECT * FROM chirps 
-WHERE @userID::UUID IS NULL OR user_id = @userID
-ORDER BY created_At;
+WHERE @userID::TEXT = '' OR user_id::TEXT = @userID
+ORDER BY CASE 
+            WHEN @sort::TEXT = 'desc' THEN created_at
+            END DESC,
+        CASE
+            WHEN @sort IS NULL OR @sort::TEXT = 'asc' THEN created_at
+            END ASC;
 
 -- name: DeleteChirp :exec
 DELETE FROM chirps WHERE id = $1 AND user_id = $2;
