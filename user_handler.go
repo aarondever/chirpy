@@ -120,6 +120,51 @@ func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	utils.RespondWithJSON(w, r, response, http.StatusCreated)
 }
 
+func (cfg *apiConfig) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		utils.RespondWithError(w, r, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	userID, err := auth.ValidateJWT(token, cfg.jwtSecret)
+	if err != nil {
+		utils.RespondWithError(w, r, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	var body userRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		utils.RespondWithError(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	hash, err := auth.HashPassword(body.Password)
+	if err != nil {
+		utils.RespondWithError(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	user, err := cfg.dbQueries.UpdateUser(r.Context(), database.UpdateUserParams{
+		ID:             userID,
+		Email:          body.Email,
+		HashedPassword: hash,
+	})
+	if err != nil {
+		utils.RespondWithError(w, r, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	response := userResponse{
+		ID:        user.ID,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+		Email:     user.Email,
+	}
+
+	utils.RespondWithJSON(w, r, response, http.StatusOK)
+}
+
 func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) {
 	token, err := auth.GetBearerToken(r.Header)
 	if err != nil {
