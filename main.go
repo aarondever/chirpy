@@ -50,6 +50,7 @@ func main() {
 	serverMux.HandleFunc("POST /api/login", cfg.handleLogin)
 	serverMux.HandleFunc("POST /api/refresh", cfg.handleRefreshToken)
 	serverMux.HandleFunc("POST /api/revoke", cfg.handleRevokeToken)
+	serverMux.HandleFunc("POST /api/polka/webhooks", cfg.polkaWebhook)
 
 	server := http.Server{
 		Handler: serverMux,
