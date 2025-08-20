@@ -18,6 +18,7 @@ type userResponse struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Email     string    `json:"email"`
+	Token     string    `json:"token"`
 }
 
 type chirpResponse struct {
@@ -29,21 +30,24 @@ type chirpResponse struct {
 }
 
 type userRequest struct {
-	Password string `json:"password"`
-	Email    string `json:"email"`
+	Password         string `json:"password"`
+	Email            string `json:"email"`
+	ExpiresInSeconds int    `json:"expires_in_seconds"`
 }
 
 func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
+	// parse request
 	var body userRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		utils.RespondWithError(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
 
+	// get user from db
 	user, err := cfg.dbQueries.GetUserByEmail(r.Context(), body.Email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			utils.RespondWithJSON(w, r, "User not found", http.StatusNotFound)
+			utils.RespondWithJSON(w, r, err.Error(), http.StatusNotFound)
 			return
 		}
 
@@ -51,16 +55,31 @@ func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// password check
 	if err := auth.CheckPasswordHash(body.Password, user.HashedPassword); err != nil {
 		utils.RespondWithError(w, r, "Incorrect email or password", http.StatusUnauthorized)
 		return
 	}
 
+	// generate jwt
+	expiresIn := time.Hour
+	if sec := time.Duration(body.ExpiresInSeconds) * time.Second; sec > 0 && sec < expiresIn {
+		expiresIn = sec
+	}
+
+	token, err := auth.MakeJWT(user.ID, cfg.jwtSecret, expiresIn)
+	if err != nil {
+		utils.RespondWithJSON(w, r, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// return response
 	response := userResponse{
 		ID:        user.ID,
 		CreatedAt: user.CreatedAt,
 		UpdatedAt: user.UpdatedAt,
 		Email:     user.Email,
+		Token:     token,
 	}
 
 	utils.RespondWithJSON(w, r, response, http.StatusOK)
@@ -99,14 +118,25 @@ func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) {
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		utils.RespondWithError(w, r, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	userID, err := auth.ValidateJWT(token, cfg.jwtSecret)
+	if err != nil {
+		utils.RespondWithError(w, r, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
 	type requestBody struct {
-		Body   string    `json:"body"`
-		UserID uuid.UUID `json:"user_id"`
+		Body string `json:"body"`
 	}
 
 	var body requestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		utils.RespondWithError(w, r, "Something went wrong", http.StatusInternalServerError)
+		utils.RespondWithError(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -117,7 +147,7 @@ func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) 
 
 	chirp, err := cfg.dbQueries.CreateChirp(r.Context(), database.CreateChirpParams{
 		Body:   censorProfane(body.Body),
-		UserID: body.UserID,
+		UserID: userID,
 	})
 	if err != nil {
 		utils.RespondWithError(w, r, err.Error(), http.StatusInternalServerError)
@@ -167,7 +197,7 @@ func (cfg *apiConfig) handleGetChirpByID(w http.ResponseWriter, r *http.Request)
 	chirp, err := cfg.dbQueries.GetChirpById(r.Context(), chirpID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			utils.RespondWithJSON(w, r, "Chirp not found", http.StatusNotFound)
+			utils.RespondWithJSON(w, r, err.Error(), http.StatusNotFound)
 			return
 		}
 
