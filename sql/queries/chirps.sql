@@ -10,7 +10,9 @@ VALUES (
 RETURNING *;
 
 -- name: GetChirps :many
-SELECT * FROM chirps ORDER BY created_At;
+SELECT * FROM chirps 
+WHERE @userID::UUID IS NULL OR user_id = @userID
+ORDER BY created_At;
 
 -- name: DeleteChirp :exec
 DELETE FROM chirps WHERE id = $1 AND user_id = $2;
